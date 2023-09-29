@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+    <title>Test</title>
+    <style>
+        .center {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        [v-cloak] {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="app" v-cloak>
+        <section class="section has-background-black">
+            <div class="container center">
+                <h1 class="title has-text-white">esp8266 App</h1>
+            </div>
+            <h2 class="subtitle" style="color:bisque">Network Configuration Test</h2>
+            <form>
+                <div class="block">
+                    <label for="essid" class="has-text-grey">Network Name &nbsp;</label>
+                    <input type="text" v-model="essid" placeholder="essid" />
+                </div>
+                <div class="block">
+                    <label for="passwd" class="has-text-grey">Password &nbsp;</label>
+                    <input type="password" v-model="password" placeholder="password" />
+                </div>
+                <div class="block">
+                    <label for="ap" class="has-text-grey">Enable Access Point &nbsp;</label>
+                    <input type="checkbox" v-model="apEnabled" />
+                </div>
+                <div class="block">
+                    <button @click.prevent="saveNetwork">Save</button>
+                </div>
+            </form>
+        </section>
+        <section class="section has-background-grey">
+            <div v-for="pin in gpio" class="block">
+                <button @click="setGPIO(pin.id)">{{ pin.name }}</button>
+                <strong v-if="pin.status" class="has-text-black">&nbsp;1</strong>
+                <strong v-else>&nbsp;0</strong>
+            </div>
+        </section>
+        <section class="section">
+            <p><strong>ADC [se]: </strong><span id="adc">(value)</span></p>
+            <div class="chart" id="fig" style="width: 600px;"></div>
+        </section>
+    </div>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script>
+        let app = Vue.createApp({
+            data(){
+                return {
+                    essid: '',
+                    password: '',
+                    apEnabled: false,
+                    gpio: {
+                        2: { id: 2, name: "D4 (GPIO2) «Builtin LED»", status: false }
+                    },
+                }
+            },
+            methods: {
+                setGPIO(pin){
+                    this.gpio[pin].status = !this.gpio[pin].status;
+                    let value = this.gpio[pin].status ? '1' : '0';
+                    let gpio = { number: this.gpio[pin].id, value: value };
+                    console.table(gpio);
+                    fetch("/gpio", { method: 'POST', body: JSON.stringify(gpio)})
+                        .then(res => res.json())
+                        .then(res => { console.table(res); })
+                },
+                getGPIO(){
+                    fetch("/gpio?number=0")
+                    .then(res => res.json())
+                    .then(res => { console.table(res); })
+                },
+                saveNetwork() {
+                    // TODO: Check for empty values
+                    let params = {
+                        essid: this.essid,
+                        password: this.password,
+                        can_start_ap: this.apEnabled
+                    };
+                    fetch("/network", { method: "POST", body: JSON.stringify(params) })
+                        .then(res => res.json())
+                        .then(res => {
+                            if (!res.ok) {
+                                alert(res.error);
+                            } else {
+                                alert('OK');
+                            }
+                    })
+                }
+            }
+        });
+        app.mount('#app');
+    </script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.6/d3.min.js"></script>
+    <script>
+        const date = new Date()
+        let X = [(new Date()).toISOString()];
+        let Y = [0];
+        let initData = [{ line: { "color": "blue" }, x: X, y: Y, type: "scatter" }];
+
+        Plotly.newPlot('fig', initData);
+        
+        /*document.addEventListener('readystatechange', event => {
+            if(event.target.readyState == 'complete'){
+                let dateParam = { secs: date.getTime() };
+                fetch("/date", { method: 'POST', body: JSON.stringify(dateParam)})
+                    .then(res => res.json())
+                    .then(res => { console.table(res); })
+            }
+        });*/
+
+        const sse = new EventSource( "/events");
+        sse.onmessage = function(evt){
+            let data = JSON.parse(evt.data);
+            X.push((new Date()).toISOString());
+            Y.push(data.y);
+            document.querySelector('#adc').innerHTML = data.y;
+            Plotly.newPlot('fig', [{ x: X, y: Y }]);
+        }
+    </script>
+</body>
+</html>

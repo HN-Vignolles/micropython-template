@@ -1,0 +1,9 @@
+services:
+  main-app:
+    build: .
+    image: unix-test
+    entrypoint: micropython main.py
+
+  test:
+    image: unix-test
+    command: ./test.sh

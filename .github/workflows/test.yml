@@ -1,0 +1,27 @@
+name: Docker Test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      working-directory: ./unix
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build the Docker image
+      run: docker compose build
+      working-directory: ${{env.working-directory}}
+    - name: Start the backend
+      run: docker compose up main-app -d
+      working-directory: ${{env.working-directory}}
+    - name: Run the actual test
+      run: docker compose up test
+      working-directory: ${{env.working-directory}}
+    - name: Finally
+      run: docker compose down main-app
+      working-directory: ${{env.working-directory}}
